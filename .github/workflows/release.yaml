@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  COSIGN_KEY_PREFIX: release-${{ github.event.repository.name }}_${{ github.ref_name }}
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_TOKEN }}
+      - uses: anchore/sbom-action/download-syft@v0
+      - uses: teler-sh/actions/setup-go@v1
+      - uses: teler-sh/actions/cosign/generate@v1
+        with:
+          password: ${{ secrets.COSIGN_PASSWORD }}
+          key-prefix: ${{ env.COSIGN_KEY_PREFIX }}
+      - uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --clean --skip validate
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}

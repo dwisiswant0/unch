@@ -1,0 +1,49 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "**.go"
+      - "go.mod"
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - "**.go"
+      - "go.mod"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make ci
+
+  sast:
+    runs-on: ubuntu-latest
+    needs: tests
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: teler-sh/actions/dependency-review@v1
+        if: (github.event_name == 'push')
+      - uses: teler-sh/actions/golangci-lint@v1
+      - uses: teler-sh/actions/semgrep@v1
+      - uses: teler-sh/actions/bearer@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: teler-sh/actions/codeql@v1
+        with:
+          lang: go

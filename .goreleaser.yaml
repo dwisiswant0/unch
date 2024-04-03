@@ -1,0 +1,144 @@
+env:
+  - COSIGN_YES=true
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+
+dist: ./bin
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - android
+      - darwin
+      - freebsd
+      - linux
+      - netbsd
+      - openbsd
+      - solaris
+      - windows
+    goarch:
+      - "386"
+      - "amd64"
+      - "arm"
+      - "arm64"
+    ignore:
+      - goos: android
+        goarch: "386"
+      - goos: android
+        goarch: "amd64"
+      - goos: android
+        goarch: "arm"
+      - goos: darwin
+        goarch: "386"
+    ldflags:
+      - -s -w
+      - -X main.AppVersion={{ .Tag }}
+      - -X main.BuildCommit={{ .ShortCommit }}
+
+archives:
+  - format: binary
+    name_template: >-
+      {{- .ProjectName }}_{{- .Tag }}-
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+
+signs:
+  - cmd: cosign
+    stdin: "{{ .Env.COSIGN_PASSWORD }}"
+    args:
+      - "sign-blob"
+      - "--key"
+      - "{{ .Env.COSIGN_KEY_PREFIX }}.key"
+      - "--output-signature"
+      - "${signature}"
+      - "${artifact}"
+    artifacts: binary
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Tag }}-checksums.txt"
+
+sboms:
+  - artifacts: binary
+    documents:
+      - >-
+        {{- .ProjectName }}_{{- .Tag }}-
+        {{- .Os }}_
+        {{- if eq .Arch "amd64" }}x86_64
+        {{- else if eq .Arch "386" }}i386
+        {{- else }}{{ .Arch }}{{ end }}.spdx.sbom
+
+snapshot:
+  name_template: "{{ .Tag }}-{{ .ShortCommit }}"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/dwisiswant0/{{ .ProjectName }}:{{ .Tag }}"
+      - "ghcr.io/dwisiswant0/{{ .ProjectName }}:v{{ .Major }}.{{ .Minor }}"
+      - "ghcr.io/dwisiswant0/{{ .ProjectName }}:v{{ .Major }}"
+      - "ghcr.io/dwisiswant0/{{ .ProjectName }}:latest"
+    dockerfile: Dockerfile.goreleaser
+    use: docker
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.description={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.source=https://github.com/dwisiswant0/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.url=https://github.com/dwisiswant0/{{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+
+docker_signs:
+  - cmd: cosign
+    stdin: "{{ .Env.COSIGN_PASSWORD }}"
+    args:
+      - "sign"
+      - "--key"
+      - "{{ .Env.COSIGN_KEY_PREFIX }}.key"
+      - "--upload=false"
+      - "${artifact}"
+    artifacts: images
+    output: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^build"
+      - "^chore"
+      - "^ci"
+      - "^docs"
+      - "^refactor"
+      - "^test"
+      - Merge pull request
+      - Merge branch
+
+release:
+  draft: true
+  prerelease: auto
+  footer: |
+    ## Verify
+
+    > [!IMPORTANT]
+    > It is strongly recommended to verify the integrity and security of the release assets before executing them. This helps mitigate potential risks associated with running unverified files.
+
+    First, verify the file using checksums.
+
+    ```bash
+    sha256sum --check --ignore-missing {{ .ProjectName }}_{{ .Tag }}-checksums.txt
+    ```
+
+    Then, ensure the authenticity of the release asset with [Cosign](https://github.com/sigstore/cosign):
+
+    ```bash
+    cosign verify-blob --key release-{{ .ProjectName }}_{{ .Tag }}.pub --signature {{ .ProjectName }}_{{ .Tag }}-OS_ARCH.sig {{ .ProjectName }}_{{ .Tag }}-OS_ARCH
+    ```
+  name_template: "{{ .ProjectName }}-{{ .Tag }}"
+  extra_files:
+    - glob: "{{ .Env.COSIGN_KEY_PREFIX }}.pub"

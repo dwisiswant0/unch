@@ -1,0 +1,5 @@
+FROM scratch
+
+COPY unch /unch
+
+ENTRYPOINT ["/unch"]
