@@ -30,7 +30,7 @@ jobs:
         with:
           password: ${{ secrets.COSIGN_PASSWORD }}
           key-prefix: ${{ env.COSIGN_KEY_PREFIX }}
-      - uses: goreleaser/goreleaser-action@v5
+      - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
           args: release --clean --skip validate
