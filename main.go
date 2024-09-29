@@ -22,6 +22,8 @@ func main() {
 		}
 
 		switch {
+		case len(args) <= 0:
+			showErr(ErrNoOp)
 		case opts.Decode:
 			output, err = opts.decode(args[0])
 		case opts.Lorem:
